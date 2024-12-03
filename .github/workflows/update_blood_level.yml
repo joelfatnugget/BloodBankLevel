@@ -21,12 +21,12 @@ jobs:
     - name: Install dependencies
       run: |
         pip install requests beautifulsoup4
-      working-directory: /home/runner/work/BloodBankLevel/BloodBankLevel
+      working-directory: /home/runner/work
 
     - name: Run Python script
       run: |
         python fetch_blood_levels.py
-      working-directory: /home/runner/work/BloodBankLevel/BloodBankLevel
+      working-directory: /home/runner/work
 
     - name: Commit and push changes
       run: |
@@ -35,4 +35,4 @@ jobs:
         git add blood_levels.md
         git commit -m "Update blood levels card"
         git push
-      working-directory: /home/runner/work/BloodBankLevel/BloodBankLevel
+      working-directory: /home/runner/work
