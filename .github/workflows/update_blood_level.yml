@@ -26,7 +26,7 @@ jobs:
 
     - name: Run Python script
       run: |
-        python fetch_blood_levels.py
+        python fetch_blood.py
       working-directory: /home/runner/work/BloodBankLevel/BloodBankLevel
 
     - name: Commit and push changes
