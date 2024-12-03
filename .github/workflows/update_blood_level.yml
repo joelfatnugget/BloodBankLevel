@@ -21,7 +21,7 @@ jobs:
     - name: Install dependencies
       run: pip install requests beautifulsoup4
 
-    - name: Run Python script
+    - name: Run Python script1
       run: python fetch_blood_levels.py
 
     - name: Commit and push changes
