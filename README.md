@@ -1,10 +1,15 @@
-# BloodBankLevel
-This will scrap the redcross website for the various blood bank level. Subsequently it will publish the data to my github profile.
+Singapore Blood Levels
+ Please donate to the Blood Bank if you are able to do so!
+================================================================================================================================
 
-
-# Blood Levels Tracker
-
-This repository tracks the blood levels in Singapore and updates every hour.
-
-<!-- Card-like Markdown -->
-[See the Blood Levels Report](blood_levels.md)
+### Blood Levels (Updated: 2024-12-03 04:01)
+| Blood Type | Level     |
+|------------|-----------|
+| A+     | Healthy |
+| B+     | Healthy |
+| O+     | Healthy |
+| AB+     | Moderate |
+| A-     | Moderate |
+| B-     | Moderate |
+| O-     | Moderate |
+| AB-     | Healthy |
