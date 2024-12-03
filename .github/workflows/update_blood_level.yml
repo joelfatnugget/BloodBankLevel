@@ -13,19 +13,20 @@ jobs:
     - name: Checkout repository
       uses: actions/checkout@v3
 
-    - name: Set working directory to the repository root
-      working-directory: /home/runner/work/BloodBankLevel  # Set the correct path
-
     - name: Set up Python
       uses: actions/setup-python@v4
       with:
         python-version: "3.x"
 
     - name: Install dependencies
-      run: pip install requests beautifulsoup4
+      run: |
+        pip install requests beautifulsoup4
+      working-directory: /home/runner/work/BloodBankLevel
 
     - name: Run Python script
-      run: python fetch_blood_levels.py
+      run: |
+        python fetch_blood_levels.py
+      working-directory: /home/runner/work/BloodBankLevel
 
     - name: Commit and push changes
       run: |
@@ -34,3 +35,4 @@ jobs:
         git add blood_levels.md
         git commit -m "Update blood levels card"
         git push
+      working-directory: /home/runner/work/BloodBankLevel
