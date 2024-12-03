@@ -23,19 +23,16 @@ def fetch_blood_levels():
 
 # Function to write blood levels to Markdown
 def write_to_markdown(blood_levels):
-    current_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    with open("blood_levels.md", "w") as file:
-        # Header
-        file.write("# Blood Levels Status\n\n")
-        file.write(f"**Last Updated**: {current_time}\n\n")
-        file.write("## Blood Levels Overview\n\n")
-        
-        # Table format
-        file.write("| Blood Type | Status         |\n")
-        file.write("|------------|----------------|\n")
-        for blood_type, level in blood_levels.items():
-            file.write(f"| {blood_type}      | {level} |\n")
-
+    current_time = datetime.now().strftime("%Y-%m-%d %H:%M")
+    markdown_content = "Singapore Blood Levels\n Please donate to the Blood Bank if you are able to do so!"
+    markdown_content += "\n================================================================================================================================"
+    markdown_content += f"\n\n### Blood Levels (Updated: {current_time})\n"
+    markdown_content += "| Blood Type | Level     |\n"
+    markdown_content += "|------------|-----------|\n"
+    for blood_type, level in blood_levels.items():
+        markdown_content += f"| {blood_type}     | {level} |\n"
+    with open("README.md", "w") as file:
+       file.write(markdown_content)
 # Main script execution
 if __name__ == "__main__":
     blood_levels = fetch_blood_levels()
