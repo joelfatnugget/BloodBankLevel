@@ -1,6 +1,7 @@
 import requests
 from bs4 import BeautifulSoup
 from datetime import datetime
+import pytz
 
 # Function to fetch blood levels
 def fetch_blood_levels():
@@ -23,10 +24,12 @@ def fetch_blood_levels():
 
 # Function to write blood levels to Markdown
 def write_to_markdown(blood_levels):
-    current_time = datetime.now().strftime("%Y-%m-%d %H:%M")
+    sg_timezone = pytz.timezone("Asia/Singapore")
+    current_time = datetime.now(sg_timezone)
+    formatted_time = current_time.strftime("%d %b %Y %H:%M:%S GMT+8")
     markdown_content = "Singapore Blood Levels\n Please donate to the Blood Bank if you are able to do so!"
     markdown_content += "\n================================================================================================================================"
-    markdown_content += f"\n\n### Blood Levels (Updated: {current_time})\n"
+    markdown_content += f"\n\n### Blood Levels (Updated: {formatted_time})\n"
     markdown_content += "| Blood Type | Level     |\n"
     markdown_content += "|------------|-----------|\n"
     for blood_type, level in blood_levels.items():
