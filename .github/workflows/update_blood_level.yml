@@ -2,7 +2,7 @@ name: Update Blood Levels Card
 
 on:
   schedule:
-    - cron: "0 * * * *" # Runs every hour (adjust as needed)
+    - cron: "0 * * * *" # Runs every hour
   workflow_dispatch: # Allows manual triggering
 
 jobs:
@@ -13,6 +13,9 @@ jobs:
     - name: Checkout repository
       uses: actions/checkout@v3
 
+    - name: Set working directory to the repository root
+      working-directory: /home/runner/work/BloodBankLevel  # Set the correct path
+
     - name: Set up Python
       uses: actions/setup-python@v4
       with:
@@ -21,7 +24,7 @@ jobs:
     - name: Install dependencies
       run: pip install requests beautifulsoup4
 
-    - name: Run Python script1
+    - name: Run Python script
       run: python fetch_blood_levels.py
 
     - name: Commit and push changes
