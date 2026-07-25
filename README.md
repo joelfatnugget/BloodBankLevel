@@ -2,7 +2,7 @@ Singapore Blood Levels
  Please donate to the Blood Bank if you are able to do so!
 ================================================================================================================================
 
-### Blood Levels (Updated: 24 Jul 2026 10:40:36 GMT+8)
+### Blood Levels (Updated: 25 Jul 2026 10:38:46 GMT+8)
 | Blood Type | Level     |
 |------------|-----------|
 | A+     | Healthy |
@@ -12,4 +12,4 @@ Singapore Blood Levels
 | A-     | Moderate |
 | B-     | Healthy |
 | O-     | Moderate |
-| AB-     | Healthy |
+| AB-     | Moderate |
