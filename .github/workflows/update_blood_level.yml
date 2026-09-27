@@ -2,8 +2,8 @@ name: Update Blood Levels Card
 
 on:
   schedule:
-    - cron: "0 0 * * *" # Runs every hour
-  workflow_dispatch: # Allows manual triggering
+    - cron: "0 0 * * *"
+  workflow_dispatch:
 
 jobs:
   update-blood-levels:
@@ -14,26 +14,30 @@ jobs:
       uses: actions/checkout@v4
 
     - name: Set up Python
-      uses: actions/setup-python@v4
+      uses: actions/setup-python@v5
       with:
-        python-version: "3.x"
+        python-version: "3.12"
 
     - name: Install dependencies
       run: |
-        ls -la
-        pip install requests beautifulsoup4 pytz
-      working-directory: /home/runner/work/BloodBankLevel/BloodBankLevel
+        pip install -r requirements.txt
+
+    - name: Run tests
+      run: |
+        pytest tests/
 
     - name: Run Python script
       run: |
         python fetch_blood.py
-      working-directory: /home/runner/work/BloodBankLevel/BloodBankLevel
 
     - name: Commit and push changes
       run: |
         git config --global user.name "github-actions[bot]"
         git config --global user.email "github-actions[bot]@users.noreply.github.com"
         git add README.md
-        git commit -m "Update blood levels card in README.md"
-        git push
-      working-directory: /home/runner/work/BloodBankLevel/BloodBankLevel
+        if ! git diff --staged --quiet; then
+          git commit -m "Update blood levels card in README.md"
+          git push
+        else
+          echo "No changes in blood levels detected."
+        fi
