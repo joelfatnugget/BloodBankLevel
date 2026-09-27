@@ -118,3 +118,22 @@ def test_write_to_markdown_empty_raises(tmp_path):
     with pytest.raises(ValueError, match="blood_levels cannot be empty"):
         write_to_markdown({}, output_path=str(output_file))
     assert not output_file.exists()
+
+def test_default_url_is_www_redcross_sg():
+    from fetch_blood import DEFAULT_URL
+    assert DEFAULT_URL == "https://www.redcross.sg/"
+
+def test_parse_last_update_date():
+    from fetch_blood import parse_last_update_date
+    html = '<p class="blood-stock-last-update-text">Last blood stock update: 25 September 2026</p>'
+    date_str = parse_last_update_date(html)
+    assert date_str == "25 September 2026"
+
+def test_write_to_markdown_includes_source_update(tmp_path):
+    output_file = tmp_path / "README.md"
+    sample_levels = {"A+": "Healthy"}
+    write_to_markdown(sample_levels, output_path=str(output_file), source_last_updated="25 September 2026")
+    content = output_file.read_text()
+    assert "Red Cross Singapore official update: 25 September 2026" in content
+    assert "| A+     | Healthy |" in content
+
