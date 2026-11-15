@@ -2,7 +2,7 @@ Singapore Blood Levels
  Please donate to the Blood Bank if you are able to do so!
 ================================================================================================================================
 
-### Blood Levels (Updated: 14 Nov 2026 13:13:13 GMT+8)
+### Blood Levels (Updated: 15 Nov 2026 13:06:39 GMT+8)
 > Red Cross Singapore official update: 13 Nov 2026
 
 | Blood Type | Level     |
