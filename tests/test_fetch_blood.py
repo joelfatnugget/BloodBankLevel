@@ -226,3 +226,21 @@ def test_fetch_blood_data_retries_on_transient_empty_markup(mock_get, mock_sleep
     assert mock_get.call_count == 2
     mock_sleep.assert_called_once_with(5.0)
 
+def test_parse_blood_levels_normalizes_casing():
+    html = """
+    <div class="blood-level-card" blood-type="a-" blood-level="low"></div>
+    <div class="blood-level-card" blood-type="B-" blood-level="healthy"></div>
+    <div class="blood-level-card" blood-type="o-" blood-level="very low"></div>
+    """
+    levels = parse_blood_levels(html)
+    assert levels == {
+        "A-": "Low",
+        "B-": "Healthy",
+        "O-": "Very Low",
+    }
+
+def test_parse_last_update_date_normalizes_nbsp_whitespace():
+    from fetch_blood import parse_last_update_date
+    html = '<p class="blood-stock-last-update-text">Last blood stock update:&nbsp;25  Nov\xa02026</p>'
+    assert parse_last_update_date(html) == "25 Nov 2026"
+

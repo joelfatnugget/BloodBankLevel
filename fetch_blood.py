@@ -48,7 +48,7 @@ def parse_blood_levels(html_content: str) -> dict[str, str]:
                 blood_level = status_el.text.strip()
 
         if blood_type and blood_level:
-            blood_levels[blood_type.strip()] = blood_level.strip()
+            blood_levels[blood_type.strip().upper()] = blood_level.strip().title()
 
     # Fallback strategy: Legacy markup with blood-grp-text class
     if not blood_levels:
@@ -57,8 +57,8 @@ def parse_blood_levels(html_content: str) -> dict[str, str]:
             h3 = element.find("h3")
             h5 = element.find("h5")
             if h3 and h5:
-                blood_type = h3.text.strip()
-                blood_level = h5.text.strip()
+                blood_type = h3.text.strip().upper()
+                blood_level = h5.text.strip().title()
                 if blood_type and blood_level:
                     blood_levels[blood_type] = blood_level
 
@@ -75,7 +75,7 @@ def parse_last_update_date(html_content: str) -> str | None:
 
     match = re.search(r"Last blood stock update:\s*([^<\n\r]+)", text_to_check, re.IGNORECASE)
     if match:
-        return match.group(1).strip()
+        return " ".join(match.group(1).split())
     return None
 
 def fetch_blood_levels(
