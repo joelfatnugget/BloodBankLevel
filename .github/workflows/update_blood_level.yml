@@ -2,12 +2,21 @@ name: Update Blood Levels Card
 
 on:
   schedule:
-    - cron: "0 0 * * *"
+    # Run at 00:17 UTC (~08:17 SGT) to avoid midnight UTC runner contention
+    - cron: "17 0 * * *"
   workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: update-blood-levels
+  cancel-in-progress: false
 
 jobs:
   update-blood-levels:
     runs-on: ubuntu-latest
+    timeout-minutes: 10
 
     steps:
     - name: Checkout repository
@@ -37,7 +46,7 @@ jobs:
         git add README.md
         if ! git diff --staged --quiet; then
           git commit -m "Update blood levels card in README.md"
-          git push
+          git pull --rebase && git push
         else
           echo "No changes in blood levels detected."
         fi

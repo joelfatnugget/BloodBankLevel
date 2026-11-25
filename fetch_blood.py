@@ -1,4 +1,5 @@
 import re
+import time
 import requests
 from bs4 import BeautifulSoup
 from datetime import datetime
@@ -9,6 +10,21 @@ DEFAULT_USER_AGENT = (
     "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
     "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
 )
+DEFAULT_TIMEOUT: tuple[int, int] = (15, 60)
+DEFAULT_MAX_RETRIES: int = 3
+DEFAULT_BACKOFF_SECONDS: float = 5.0
+RETRYABLE_STATUS_CODES: frozenset[int] = frozenset(
+    {429, 500, 502, 503, 504, 520, 521, 522, 523, 524}
+)
+
+
+def _build_headers(user_agent: str) -> dict[str, str]:
+    """Build browser-like request headers for Red Cross Singapore."""
+    return {
+        "User-Agent": user_agent,
+        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+        "Accept-Language": "en-US,en;q=0.9",
+    }
 
 def parse_blood_levels(html_content: str) -> dict[str, str]:
     """Parse blood stock levels from HTML markup supporting both current Elementor and legacy structures."""
@@ -62,23 +78,79 @@ def parse_last_update_date(html_content: str) -> str | None:
         return match.group(1).strip()
     return None
 
-def fetch_blood_levels(url: str = DEFAULT_URL, user_agent: str = DEFAULT_USER_AGENT, timeout: int = 30) -> dict[str, str]:
+def fetch_blood_levels(
+    url: str = DEFAULT_URL,
+    user_agent: str = DEFAULT_USER_AGENT,
+    timeout: int | float | tuple[int | float, int | float] = DEFAULT_TIMEOUT,
+    max_retries: int = DEFAULT_MAX_RETRIES,
+    backoff_seconds: float = DEFAULT_BACKOFF_SECONDS,
+) -> dict[str, str]:
     """Fetch and parse live blood levels from Red Cross Singapore."""
-    headers = {"User-Agent": user_agent}
-    response = requests.get(url, headers=headers, timeout=timeout)
-    response.raise_for_status()
+    levels, _ = fetch_blood_data(
+        url=url,
+        user_agent=user_agent,
+        timeout=timeout,
+        max_retries=max_retries,
+        backoff_seconds=backoff_seconds,
+    )
+    return levels
 
-    return parse_blood_levels(response.text)
+def fetch_blood_data(
+    url: str = DEFAULT_URL,
+    user_agent: str = DEFAULT_USER_AGENT,
+    timeout: int | float | tuple[int | float, int | float] = DEFAULT_TIMEOUT,
+    max_retries: int = DEFAULT_MAX_RETRIES,
+    backoff_seconds: float = DEFAULT_BACKOFF_SECONDS,
+) -> tuple[dict[str, str], str | None]:
+    """Fetch blood levels and official publication timestamp with exponential backoff retries."""
+    if max_retries < 0:
+        raise ValueError("max_retries must be >= 0")
 
-def fetch_blood_data(url: str = DEFAULT_URL, user_agent: str = DEFAULT_USER_AGENT, timeout: int = 30) -> tuple[dict[str, str], str | None]:
-    """Fetch blood levels and official publication timestamp from Red Cross Singapore."""
-    headers = {"User-Agent": user_agent}
-    response = requests.get(url, headers=headers, timeout=timeout)
-    response.raise_for_status()
+    headers = _build_headers(user_agent)
+    total_attempts = max_retries + 1
 
-    levels = parse_blood_levels(response.text)
-    last_update = parse_last_update_date(response.text)
-    return levels, last_update
+    for attempt in range(1, total_attempts + 1):
+        response = None
+        retry_error: Exception | None = None
+        try:
+            response = requests.get(url, headers=headers, timeout=timeout)
+            response.raise_for_status()
+
+            levels = parse_blood_levels(response.text)
+            last_update = parse_last_update_date(response.text)
+            return levels, last_update
+        except requests.exceptions.HTTPError as exc:
+            status_code = exc.response.status_code if exc.response is not None else None
+            if status_code not in RETRYABLE_STATUS_CODES or attempt > max_retries:
+                raise
+            retry_error = exc
+        except (
+            requests.exceptions.Timeout,
+            requests.exceptions.ConnectionError,
+            requests.exceptions.ChunkedEncodingError,
+            requests.exceptions.ContentDecodingError,
+            ValueError,
+        ) as exc:
+            if attempt > max_retries:
+                if isinstance(exc, ValueError) and response is not None:
+                    print(
+                        f"Parse failed on final attempt (status={response.status_code}, "
+                        f"body_length={len(response.text)}).",
+                        flush=True,
+                    )
+                raise
+            retry_error = exc
+
+        delay = backoff_seconds * (2 ** (attempt - 1))
+        print(
+            f"Attempt {attempt}/{total_attempts} failed "
+            f"({type(retry_error).__name__}: {retry_error}). "
+            f"Retrying in {delay:.1f}s...",
+            flush=True,
+        )
+        time.sleep(delay)
+
+    raise RuntimeError("Unreachable: fetch_blood_data exited retry loop without returning or raising.")
 
 def write_to_markdown(
     blood_levels: dict[str, str],
