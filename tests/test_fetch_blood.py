@@ -3,10 +3,15 @@ import pytest
 import requests
 from unittest.mock import patch, MagicMock
 from fetch_blood import (
+    BloodWidgetUnavailableError,
+    DEFAULT_URLS,
+    FALLBACK_URLS,
     parse_blood_levels,
     fetch_blood_levels,
     fetch_blood_data,
+    fetch_blood_data_from_sources,
     write_to_markdown,
+    main,
 )
 
 SAMPLE_ELEMENTOR_HTML = """
@@ -243,4 +248,144 @@ def test_parse_last_update_date_normalizes_nbsp_whitespace():
     from fetch_blood import parse_last_update_date
     html = '<p class="blood-stock-last-update-text">Last blood stock update:&nbsp;25  Nov\xa02026</p>'
     assert parse_last_update_date(html) == "25 Nov 2026"
+
+
+SAMPLE_EMPTY_SUPPLY_SECTION_HTML = """
+<div class="section blood-supply-section" id="give-blood">
+    <h2>Every <strong>Blood Donation</strong> Matters</h2>
+    <p>Every donation helps save lives.</p>
+</div>
+"""
+
+
+def test_parse_blood_levels_raises_widget_unavailable_when_section_present():
+    with pytest.raises(BloodWidgetUnavailableError, match="upstream widget unavailable"):
+        parse_blood_levels(SAMPLE_EMPTY_SUPPLY_SECTION_HTML)
+
+
+def test_parse_blood_levels_raises_plain_value_error_when_section_absent():
+    with pytest.raises(ValueError, match="No blood level data could be extracted") as exc_info:
+        parse_blood_levels("<html><body><div>Unrelated markup</div></body></html>")
+    assert not isinstance(exc_info.value, BloodWidgetUnavailableError)
+
+
+def test_default_urls_include_homepage_and_give_blood_fallback():
+    assert DEFAULT_URLS[0] == "https://www.redcross.sg/"
+    assert "https://www.redcross.sg/give-blood/" in FALLBACK_URLS
+    assert "https://www.redcross.sg/give-blood/" in DEFAULT_URLS
+
+
+@patch("fetch_blood.time.sleep")
+@patch("fetch_blood.requests.get")
+def test_fetch_blood_data_from_sources_falls_back_to_give_blood(mock_get, mock_sleep):
+    empty_section_resp = MagicMock()
+    empty_section_resp.status_code = 200
+    empty_section_resp.text = SAMPLE_EMPTY_SUPPLY_SECTION_HTML
+
+    fallback_resp = MagicMock()
+    fallback_resp.status_code = 200
+    fallback_resp.text = (
+        SAMPLE_ELEMENTOR_HTML
+        + '<p class="blood-stock-last-update-text">Last blood stock update: 27 Nov 2026</p>'
+    )
+
+    mock_get.side_effect = [empty_section_resp, fallback_resp]
+
+    levels, last_update = fetch_blood_data_from_sources(max_retries=0)
+    assert len(levels) == 8
+    assert last_update == "27 Nov 2026"
+    assert [call.args[0] for call in mock_get.call_args_list] == [
+        "https://www.redcross.sg/",
+        "https://www.redcross.sg/give-blood/",
+    ]
+    mock_sleep.assert_not_called()
+
+
+@patch("fetch_blood.time.sleep")
+@patch("fetch_blood.requests.get")
+def test_fetch_blood_data_from_sources_raises_widget_unavailable_when_all_missing_cards(mock_get, mock_sleep):
+    empty_section_resp = MagicMock()
+    empty_section_resp.status_code = 200
+    empty_section_resp.text = SAMPLE_EMPTY_SUPPLY_SECTION_HTML
+    mock_get.return_value = empty_section_resp
+
+    with pytest.raises(BloodWidgetUnavailableError):
+        fetch_blood_data_from_sources(max_retries=0)
+    assert mock_get.call_count == 2
+
+
+@patch("fetch_blood.time.sleep")
+@patch("fetch_blood.requests.get")
+def test_fetch_blood_data_from_sources_raises_widget_unavailable_if_primary_missing_and_fallback_404(mock_get, mock_sleep):
+    empty_section_resp = MagicMock()
+    empty_section_resp.status_code = 200
+    empty_section_resp.text = SAMPLE_EMPTY_SUPPLY_SECTION_HTML
+
+    not_found_resp = MagicMock()
+    not_found_resp.status_code = 404
+    not_found_resp.raise_for_status.side_effect = requests.exceptions.HTTPError(
+        "404 Not Found", response=not_found_resp
+    )
+
+    mock_get.side_effect = [empty_section_resp, not_found_resp]
+
+    with pytest.raises(BloodWidgetUnavailableError):
+        fetch_blood_data_from_sources(max_retries=0)
+
+
+@patch("fetch_blood.time.sleep")
+@patch("fetch_blood.requests.get")
+def test_fetch_blood_data_from_sources_raises_plain_value_error_on_unrecognized_markup(mock_get, mock_sleep):
+    bad_resp = MagicMock()
+    bad_resp.status_code = 200
+    bad_resp.text = "<html><body><div>Completely different page</div></body></html>"
+    mock_get.return_value = bad_resp
+
+    with pytest.raises(ValueError, match="No blood level data could be extracted") as exc_info:
+        fetch_blood_data_from_sources(max_retries=0)
+    assert not isinstance(exc_info.value, BloodWidgetUnavailableError)
+
+
+def test_main_soft_skips_and_preserves_readme_on_widget_unavailable(tmp_path, capsys):
+    readme = tmp_path / "README.md"
+    original_content = "Existing Blood Levels Content\n"
+    readme.write_text(original_content, encoding="utf-8")
+
+    with patch(
+        "fetch_blood.fetch_blood_data_from_sources",
+        side_effect=BloodWidgetUnavailableError("upstream widget unavailable"),
+    ):
+        exit_code = main(output_path=str(readme))
+
+    assert exit_code == 0
+    assert readme.read_text(encoding="utf-8") == original_content
+    captured = capsys.readouterr()
+    assert "::warning title=Red Cross blood widget unavailable::" in captured.out
+
+
+def test_main_writes_markdown_on_success(tmp_path):
+    readme = tmp_path / "README.md"
+    sample_levels = {"A+": "Healthy", "O+": "Low"}
+
+    with patch(
+        "fetch_blood.fetch_blood_data_from_sources",
+        return_value=(sample_levels, "27 Nov 2026"),
+    ):
+        exit_code = main(output_path=str(readme))
+
+    assert exit_code == 0
+    content = readme.read_text(encoding="utf-8")
+    assert "Red Cross Singapore official update: 27 Nov 2026" in content
+    assert "| A+     | Healthy |" in content
+    assert "| O+     | Low |" in content
+
+
+def test_main_propagates_non_widget_errors(tmp_path):
+    readme = tmp_path / "README.md"
+    http_err = requests.exceptions.HTTPError("503 Service Unavailable")
+
+    with patch("fetch_blood.fetch_blood_data_from_sources", side_effect=http_err):
+        with pytest.raises(requests.exceptions.HTTPError):
+            main(output_path=str(readme))
+    assert not readme.exists()
 

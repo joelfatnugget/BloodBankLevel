@@ -6,6 +6,8 @@ from datetime import datetime
 import pytz
 
 DEFAULT_URL = "https://www.redcross.sg/"
+FALLBACK_URLS: tuple[str, ...] = ("https://www.redcross.sg/give-blood/",)
+DEFAULT_URLS: tuple[str, ...] = (DEFAULT_URL, *FALLBACK_URLS)
 DEFAULT_USER_AGENT = (
     "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
     "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
@@ -16,6 +18,10 @@ DEFAULT_BACKOFF_SECONDS: float = 5.0
 RETRYABLE_STATUS_CODES: frozenset[int] = frozenset(
     {429, 500, 502, 503, 504, 520, 521, 522, 523, 524}
 )
+
+
+class BloodWidgetUnavailableError(ValueError):
+    """Raised when .blood-supply-section is rendered without any blood level cards."""
 
 
 def _build_headers(user_agent: str) -> dict[str, str]:
@@ -63,6 +69,10 @@ def parse_blood_levels(html_content: str) -> dict[str, str]:
                     blood_levels[blood_type] = blood_level
 
     if not blood_levels:
+        if soup.find(class_="blood-supply-section"):
+            raise BloodWidgetUnavailableError(
+                "Blood supply section is present, but no blood level cards were rendered (upstream widget unavailable)."
+            )
         raise ValueError("No blood level data could be extracted from page markup.")
 
     return blood_levels
@@ -152,6 +162,54 @@ def fetch_blood_data(
 
     raise RuntimeError("Unreachable: fetch_blood_data exited retry loop without returning or raising.")
 
+
+def fetch_blood_data_from_sources(
+    urls: tuple[str, ...] = DEFAULT_URLS,
+    user_agent: str = DEFAULT_USER_AGENT,
+    timeout: int | float | tuple[int | float, int | float] = DEFAULT_TIMEOUT,
+    max_retries: int = DEFAULT_MAX_RETRIES,
+    backoff_seconds: float = DEFAULT_BACKOFF_SECONDS,
+) -> tuple[dict[str, str], str | None]:
+    """Fetch blood levels across ordered source URLs, falling back on failure."""
+    if not urls:
+        raise ValueError("urls cannot be empty")
+
+    primary_widget_unavailable: BloodWidgetUnavailableError | None = None
+    first_other_error: Exception | None = None
+
+    for idx, candidate_url in enumerate(urls):
+        has_next = idx < len(urls) - 1
+        try:
+            return fetch_blood_data(
+                url=candidate_url,
+                user_agent=user_agent,
+                timeout=timeout,
+                max_retries=max_retries,
+                backoff_seconds=backoff_seconds,
+            )
+        except BloodWidgetUnavailableError as exc:
+            if idx == 0:
+                primary_widget_unavailable = exc
+            if has_next:
+                print(
+                    f"Source {candidate_url} has no blood level cards rendered; trying fallback...",
+                    flush=True,
+                )
+        except Exception as exc:
+            if first_other_error is None:
+                first_other_error = exc
+            if has_next:
+                print(
+                    f"Source {candidate_url} failed ({type(exc).__name__}: {exc}); trying fallback...",
+                    flush=True,
+                )
+
+    if primary_widget_unavailable is not None:
+        raise primary_widget_unavailable
+    if first_other_error is not None:
+        raise first_other_error
+    raise RuntimeError("Unreachable: fetch_blood_data_from_sources exited without returning or raising.")
+
 def write_to_markdown(
     blood_levels: dict[str, str],
     output_path: str = "README.md",
@@ -179,8 +237,22 @@ def write_to_markdown(
     with open(output_path, "w", encoding="utf-8") as file:
         file.write(markdown_content)
 
-if __name__ == "__main__":
-    levels, source_update = fetch_blood_data()
+def main(output_path: str = "README.md", urls: tuple[str, ...] = DEFAULT_URLS) -> int:
+    """Fetch blood data from configured sources and update the Markdown file."""
+    try:
+        levels, source_update = fetch_blood_data_from_sources(urls=urls)
+    except BloodWidgetUnavailableError as exc:
+        print(
+            f"::warning title=Red Cross blood widget unavailable::{exc} Keeping existing {output_path} unchanged.",
+            flush=True,
+        )
+        return 0
+
     print("Scraped blood levels:", levels)
     print("Official update date:", source_update)
-    write_to_markdown(levels, source_last_updated=source_update)
+    write_to_markdown(levels, output_path=output_path, source_last_updated=source_update)
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
